@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CalorieNote · 每日飲食熱量計算工具</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- 頂部導覽列 -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">🥗</div>
+        <div>
+          <h1>CalorieNote</h1>
+          <p class="brand-sub">每日飲食熱量紀錄與智慧估算</p>
+        </div>
+      </div>
+
+      <div class="date-controls" aria-label="日期切換">
+        <button type="button" class="btn btn-icon" id="prev-day-btn" title="前一天">‹</button>
+        <input type="date" id="date-picker" class="date-input" aria-label="選擇日期" />
+        <button type="button" class="btn btn-icon" id="next-day-btn" title="後一天">›</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="today-btn">今天</button>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="load-sample-btn" title="一鍵填入今日四餐範例">✨ 載入範例</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="export-csv-btn">匯出 CSV</button>
+        <button type="button" class="btn btn-outline btn-sm" id="open-settings-btn">
+          ⚙️ 目標與 AI 設定
+        </button>
+      </div>
+    </header>
+
+    <!-- 每日總覽儀表板 -->
+    <section class="dashboard-grid" aria-label="每日熱量總覽">
+      <div class="card hero-summary">
+        <div class="ring-wrap">
+          <svg class="progress-ring" viewBox="0 0 140 140" aria-hidden="true">
+            <circle class="ring-track" cx="70" cy="70" r="58" />
+            <circle class="ring-fill" id="calorie-ring-fill" cx="70" cy="70" r="58" />
+          </svg>
+          <div class="ring-center">
+            <span class="ring-label">今日總攝取</span>
+            <strong class="ring-value" id="daily-total-kcal">0</strong>
+            <span class="ring-unit">kcal</span>
+          </div>
+        </div>
+
+        <div class="hero-stats">
+          <div class="hero-stat-header">
+            <div>
+              <span class="muted">每日目標</span>
+              <div class="goal-line">
+                <strong id="daily-goal-kcal">2,000</strong> <span>kcal</span>
+              </div>
+            </div>
+            <div class="remaining-badge" id="remaining-badge">還可攝取 2,000 kcal</div>
+          </div>
+
+          <div class="macros-row">
+            <div class="macro-pill">
+              <span class="macro-dot protein"></span>
+              <span>蛋白質</span>
+              <strong id="daily-protein">0 g</strong>
+            </div>
+            <div class="macro-pill">
+              <span class="macro-dot carbs"></span>
+              <span>碳水</span>
+              <strong id="daily-carbs">0 g</strong>
+            </div>
+            <div class="macro-pill">
+              <span class="macro-dot fat"></span>
+              <span>脂肪</span>
+              <strong id="daily-fat">0 g</strong>
+            </div>
+          </div>
+
+          <!-- 四餐快捷總覽 -->
+          <div class="meal-mini-grid">
+            <button type="button" class="meal-mini-card" data-select-meal="breakfast">
+              <span class="meal-mini-title">🌅 早餐</span>
+              <strong id="mini-breakfast-kcal">0 kcal</strong>
+              <small id="mini-breakfast-count">0 項</small>
+            </button>
+            <button type="button" class="meal-mini-card" data-select-meal="lunch">
+              <span class="meal-mini-title">☀️ 午餐</span>
+              <strong id="mini-lunch-kcal">0 kcal</strong>
+              <small id="mini-lunch-count">0 項</small>
+            </button>
+            <button type="button" class="meal-mini-card" data-select-meal="dinner">
+              <span class="meal-mini-title">🌙 晚餐</span>
+              <strong id="mini-dinner-kcal">0 kcal</strong>
+              <small id="mini-dinner-count">0 項</small>
+            </button>
+            <button type="button" class="meal-mini-card" data-select-meal="snack">
+              <span class="meal-mini-title">🍓 點心</span>
+              <strong id="mini-snack-kcal">0 kcal</strong>
+              <small id="mini-snack-count">0 項</small>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 近 7 日攝取趨勢 -->
+      <div class="card trend-card">
+        <div class="card-head">
+          <h2>近 7 日熱量趨勢</h2>
+          <span class="muted" id="trend-avg-label">平均 0 kcal/天</span>
+        </div>
+        <div class="trend-chart" id="trend-chart" aria-label="近七日熱量長條圖"></div>
+      </div>
+    </section>
+
+    <!-- 主工作區：左新增表單、右四餐明細 -->
+    <main class="workspace-grid">
+      <!-- 新增 / 編輯飲食表單 -->
+      <section class="card entry-form-card" aria-label="新增飲食紀錄">
+        <div class="card-head">
+          <h2 id="form-title">新增飲食紀錄</h2>
+          <button type="button" class="btn btn-ghost btn-xs hidden" id="cancel-edit-btn">取消編輯</button>
+        </div>
+
+        <form id="food-form" novalidate>
+          <!-- 餐別 -->
+          <div class="form-group">
+            <label class="field-label">餐別</label>
+            <div class="meal-selector" role="radiogroup" aria-label="餐別選擇">
+              <button type="button" class="meal-tab active" data-meal="breakfast">🌅 早餐</button>
+              <button type="button" class="meal-tab" data-meal="lunch">☀️ 午餐</button>
+              <button type="button" class="meal-tab" data-meal="dinner">🌙 晚餐</button>
+              <button type="button" class="meal-tab" data-meal="snack">🍓 點心</button>
+            </div>
+          </div>
+
+          <!-- 照片上傳與 AI 辨識 -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">食物照片（可拖曳或 Ctrl+V 貼上）</label>
+              <span class="ai-status-pill" id="ai-status-pill">AI 狀態檢查中</span>
+            </div>
+
+            <div class="photo-dropzone" id="photo-dropzone" tabindex="0">
+              <input type="file" id="photo-input" accept="image/*" hidden />
+              <div class="dropzone-empty" id="dropzone-empty">
+                <span class="dropzone-icon">📷</span>
+                <p>點擊上傳食物照片，或拖曳 / 貼上圖片</p>
+                <small>支援自動壓縮儲存，並可一鍵估算食物熱量</small>
+              </div>
+              <div class="dropzone-preview hidden" id="dropzone-preview">
+                <img id="photo-preview-img" alt="食物照片預覽" />
+                <div class="preview-actions">
+                  <button type="button" class="btn btn-primary btn-sm" id="analyze-photo-btn">
+                    ✨ 照片估算熱量
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="remove-photo-btn">
+                    移除照片
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI / 照片辨識結果面板 -->
+            <div class="ai-results-box hidden" id="ai-results-box"></div>
+          </div>
+
+          <!-- 食物名稱 + 自動完成 -->
+          <div class="form-group autocomplete-wrap">
+            <label class="field-label" for="food-name-input">食物名稱 *</label>
+            <input
+              type="text"
+              id="food-name-input"
+              class="text-input"
+              placeholder="例如：滷雞腿便當、原味蛋餅、拿鐵、雞胸肉..."
+              autocomplete="off"
+              required
+            />
+            <div class="autocomplete-list hidden" id="autocomplete-list"></div>
+
+            <!-- 依餐別顯示的快速常用標籤 -->
+            <div class="quick-chips-wrap">
+              <span class="chips-caption">常用推薦：</span>
+              <div class="quick-chips" id="quick-food-chips"></div>
+            </div>
+          </div>
+
+          <!-- 份量輸入 -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label" for="portion-input">份量</label>
+              <span class="muted" id="unit-suggestion-hint">預設基準：1份</span>
+            </div>
+            <input
+              type="text"
+              id="portion-input"
+              class="text-input"
+              value="1份"
+              placeholder="例如：1碗、半碗、2顆、150g、大杯..."
+            />
+            <div class="portion-chips">
+              <button type="button" class="chip-btn" data-portion="0.5份">半份</button>
+              <button type="button" class="chip-btn" data-portion="1份">1份</button>
+              <button type="button" class="chip-btn" data-portion="1.5份">1.5份</button>
+              <button type="button" class="chip-btn" data-portion="2份">2份</button>
+              <button type="button" class="chip-btn" data-portion="100g">100g</button>
+              <button type="button" class="chip-btn" data-portion="200g">200g</button>
+            </div>
+          </div>
+
+          <!-- 自動估算熱量卡片 -->
+          <div class="estimate-panel">
+            <div class="estimate-top">
+              <div>
+                <span class="estimate-badge" id="estimate-source-badge">等待輸入食物</span>
+                <p class="estimate-note" id="estimate-note">輸入食物名稱與份量後，系統會自動估算熱量。</p>
+              </div>
+              <button type="button" class="btn btn-ghost btn-xs" id="re-estimate-btn">
+                ↻ 重新估算
+              </button>
+            </div>
+
+            <div class="kcal-input-row">
+              <div class="kcal-field">
+                <label class="field-label" for="calories-input">估算熱量 (kcal) *</label>
+                <div class="input-with-unit">
+                  <input type="number" id="calories-input" class="text-input kcal-number" min="0" step="1" value="0" required />
+                  <span class="unit-suffix">kcal</span>
+                </div>
+              </div>
+
+              <div class="macro-inputs">
+                <div>
+                  <label class="field-label" for="protein-input">蛋白質(g)</label>
+                  <input type="number" id="protein-input" class="text-input" min="0" step="0.1" value="0" />
+                </div>
+                <div>
+                  <label class="field-label" for="carbs-input">碳水(g)</label>
+                  <input type="number" id="carbs-input" class="text-input" min="0" step="0.1" value="0" />
+                </div>
+                <div>
+                  <label class="field-label" for="fat-input">脂肪(g)</label>
+                  <input type="number" id="fat-input" class="text-input" min="0" step="0.1" value="0" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 備註 -->
+          <div class="form-group">
+            <label class="field-label" for="notes-input">備註（選填）</label>
+            <input type="text" id="notes-input" class="text-input" placeholder="例如：少飯、去皮、微糖去冰..." />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="submit-entry-btn">
+            ＋ 加入今日紀錄
+          </button>
+        </form>
+      </section>
+
+      <!-- 今日各餐明細 -->
+      <section class="meals-column" aria-label="各餐飲食紀錄">
+        <div class="meals-stack" id="meals-stack">
+          <!-- 由 app.js 動態渲染 早/午/晚/點心 四張卡片 -->
+        </div>
+
+        <div class="card daily-footer-bar">
+          <div>
+            <span class="muted">當日四餐合計總攝取</span>
+            <div class="footer-breakdown" id="footer-breakdown">
+              早餐 0 · 午餐 0 · 晚餐 0 · 點心 0
+            </div>
+          </div>
+          <div class="footer-total">
+            <strong id="footer-total-kcal">0</strong> <span>kcal</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 設定 Modal（每日熱量目標 + BMR/TDEE 試算 + Gemini AI Key） -->
+  <div class="modal-backdrop hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="settings-title">目標與 AI 辨識設定</h2>
+        <button type="button" class="btn btn-icon" id="close-settings-btn" aria-label="關閉">✕</button>
+      </div>
+
+      <form id="settings-form">
+        <div class="form-group">
+          <label class="field-label" for="setting-daily-goal">每日熱量目標 (kcal)</label>
+          <input type="number" id="setting-daily-goal" class="text-input" min="500" max="10000" step="50" required />
+        </div>
+
+        <!-- TDEE 小工具 -->
+        <details class="tdee-box">
+          <summary>不清楚目標？點此快速試算建議熱量 (TDEE)</summary>
+          <div class="tdee-grid">
+            <div>
+              <label class="field-label" for="tdee-gender">生理性別</label>
+              <select id="tdee-gender" class="text-input">
+                <option value="female">女性</option>
+                <option value="male">男性</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="tdee-age">年齡</label>
+              <input type="number" id="tdee-age" class="text-input" value="28" min="12" max="100" />
+            </div>
+            <div>
+              <label class="field-label" for="tdee-height">身高 (cm)</label>
+              <input type="number" id="tdee-height" class="text-input" value="165" min="100" max="230" />
+            </div>
+            <div>
+              <label class="field-label" for="tdee-weight">體重 (kg)</label>
+              <input type="number" id="tdee-weight" class="text-input" value="60" min="30" max="250" />
+            </div>
+            <div class="tdee-full">
+              <label class="field-label" for="tdee-activity">活動量</label>
+              <select id="tdee-activity" class="text-input">
+                <option value="1.2">久坐少動 (×1.2)</option>
+                <option value="1.375" selected>輕度活動 / 每週運動 1-3 天 (×1.375)</option>
+                <option value="1.55">中度活動 / 每週運動 3-5 天 (×1.55)</option>
+                <option value="1.725">高度活動 / 每週運動 6-7 天 (×1.725)</option>
+              </select>
+            </div>
+            <div class="tdee-full">
+              <label class="field-label" for="tdee-goal-mode">目標方向</label>
+              <select id="tdee-goal-mode" class="text-input">
+                <option value="-350">溫和減脂 (-350 kcal)</option>
+                <option value="0" selected>維持體重 (TDEE)</option>
+                <option value="300">增肌增重 (+300 kcal)</option>
+              </select>
+            </div>
+          </div>
+          <div class="tdee-result-row">
+            <span id="tdee-preview-text" class="muted">點擊計算建議每日目標</span>
+            <button type="button" class="btn btn-outline btn-sm" id="apply-tdee-btn">套用計算結果</button>
+          </div>
+        </details>
+
+        <hr class="divider" />
+
+        <div class="form-group">
+          <label class="field-label" for="setting-gemini-key">Gemini API Key（選填，用於 AI 照片自動辨識食物）</label>
+          <input
+            type="password"
+            id="setting-gemini-key"
+            class="text-input"
+            placeholder="留空則使用內建食物庫與關鍵字估算"
+            autocomplete="off"
+          />
+          <small class="muted" id="setting-key-status">目前尚未設定 API Key</small>
+        </div>
+
+        <div class="form-group">
+          <label class="field-label" for="setting-gemini-model">Gemini 模型</label>
+          <input type="text" id="setting-gemini-model" class="text-input" value="gemini-2.5-flash" />
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost btn-sm" id="clear-api-key-btn">清除已存 Key</button>
+          <button type="submit" class="btn btn-primary">儲存設定</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 照片燈箱 Modal -->
+  <div class="modal-backdrop hidden" id="photo-modal" role="dialog" aria-modal="true" aria-label="食物照片放大檢視">
+    <div class="lightbox-card">
+      <button type="button" class="btn btn-icon lightbox-close" id="close-photo-modal-btn" aria-label="關閉">✕</button>
+      <img id="lightbox-img" alt="食物照片大圖" />
+      <p id="lightbox-caption" class="lightbox-caption"></p>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="./app.bundle.js"></script>
+</body>
+</html>
